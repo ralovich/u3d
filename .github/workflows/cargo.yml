@@ -1,0 +1,116 @@
+name: Cargo
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+  BUILD_TYPE: reldeb
+
+jobs:
+  build_and_test:
+    strategy:
+      matrix:
+        # https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners#supported-runners-and-hardware-resources
+        os:
+          - macos-latest
+          - ubuntu-latest
+          - windows-2025-vs2026
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Build system ID
+      if: runner.os != 'Windows'
+      run: |
+        echo ${{ runner.arch }}
+        uname -a
+
+    - name: Install APT build-deps
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y zstd ugrep colordiff python3-tqdm
+
+    - name: Install Homebrew build-deps
+      if: runner.os == 'macOS'
+      run: |
+        brew install zstd ugrep colordiff
+        pip3 install --break-system-packages --user tqdm
+    
+    - name: Install Windows build-deps
+      if: runner.os == 'windows'
+      run: |
+        pip3 install --break-system-packages --user tqdm
+        choco install ugrep zstandard
+
+    - name: Checkout sources
+      uses: actions/checkout@v7
+
+    - name: Lint
+      run: |
+        cargo fmt --all -- --check
+        cargo clippy --all-targets
+
+    - name: Build
+      run: |
+        cargo build --verbose --profile=${{env.BUILD_TYPE}} --all
+        #cargo build --verbose --profile=${{env.BUILD_TYPE}} --tests
+
+    - name: Checkout test data
+      uses: actions/checkout@v7
+      with:
+        repository: ralovich/u3d-db
+        path: u3d-db
+
+    - name: Run whitebox tests
+      run: |
+        cargo test --verbose --profile=${{env.BUILD_TYPE}}
+
+    - name: Run blackbox tests
+      if: runner.os != 'Windows'
+      run: |
+        cd u3d-db/u3ds
+        echo "RUST_LOG=debug RUST_BACKTRACE=1 DESCRIBE=../../target/${{env.BUILD_TYPE}}/u3d-describe INPUT=../../testdata/list_all.txt time ../../testdata/u3d_describe_mt"
+        RUST_LOG=debug RUST_BACKTRACE=1 DESCRIBE=../../target/${{env.BUILD_TYPE}}/u3d-describe INPUT=../../testdata/list_all.txt time ../../testdata/u3d_describe_mt
+        #echo "du -d 1 -h"
+        #du -d 1 -h
+        cd ../..
+
+    - name: Run blackbox tests Windows
+      if: runner.os == 'Windows1'
+      run: |
+        cd u3d-db/u3ds
+        echo "RUST_LOG=debug RUST_BACKTRACE=1 DESCRIBE=../../target/${{env.BUILD_TYPE}}/u3d-describe INPUT=../../testdata/list_all.txt time ../../testdata/u3d_describe_mt"
+        $env:RUST_LOG="debug";
+        $env:RUST_BACKTRACE="1";
+        $env:DESCRIBE="../../target/${{env.BUILD_TYPE}}/u3d-describe";
+        $env:INPUT="../../testdata/list_all.txt";
+        python3 ../../testdata/u3d_describe_mt
+        cd ../..
+        #Get-ChildItem -Recurse target
+
+    - name: No bb t regressions
+      if: runner.os != 'Windows'
+      run: |
+        echo "colordiff -u testdata/expected_all.txt u3d-db/u3ds/review_summary_u3d.txt"
+        colordiff -u testdata/expected_all.txt u3d-db/u3ds/review_summary_u3d.txt
+
+    - name: No bb t regressions Windows
+      if: runner.os == 'Windows1'
+      shell: cmd
+      run: |
+        echo "fc /l testdata\expected_all.txt u3d-db\u3ds\review_summary_u3d.txt"
+        fc /l testdata\expected_all.txt u3d-db\u3ds\review_summary_u3d.txt
+
+    - name: Archive u3d_tools
+      uses: actions/upload-artifact@v7
+      with:
+        name: u3d_tools-${{runner.arch}}-${{runner.os}}
+        path: |
+          target/${{env.BUILD_TYPE}}/u3d-describe
+          target/${{env.BUILD_TYPE}}/u3d-describe.exe
+

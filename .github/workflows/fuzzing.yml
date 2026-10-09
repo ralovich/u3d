@@ -1,0 +1,68 @@
+name: Fuzzing
+
+on:
+#  push:
+#    branches: [ "main" ]
+#  pull_request:
+#    branches: [ "main" ]
+  schedule:
+    - cron: '*/15 * * * *'
+
+env:
+  FUZZ_TIME: 600
+  CARGO_FUZZ_VERSION: 0.13.2
+
+jobs:
+  cargo-fuzz:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - fuzz_target: fuzz-target-1
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout sources
+      uses: actions/checkout@v7
+
+    - name: Install build deps
+      run: |
+        rustup toolchain install nightly
+        rustup default nightly
+        cargo install --force --version ${{ env.CARGO_FUZZ_VERSION }} cargo-fuzz --locked
+
+    - name: Restore corpus from cache
+      uses: actions/cache/restore@v6
+      with:
+        path: fuzz/corpus
+        key: cargo-fuzz-bin-${{ env.CARGO_FUZZ_VERSION }}-${{ matrix.fuzz_target }}-
+        restore-keys: |
+          cargo-fuzz-bin-${{ env.CARGO_FUZZ_VERSION }}-${{ matrix.fuzz_target }}-
+
+    - run: echo "${{ runner.tool_cache }}/cargo-fuzz/bin" >> $GITHUB_PATH
+    - run: cargo install --root "${{ runner.tool_cache }}/cargo-fuzz" --version ${{ env.CARGO_FUZZ_VERSION }} cargo-fuzz --locked
+
+    - run: cargo fuzz build ${{ matrix.fuzz_target }}
+    - run: mkdir -p fuzz/corpus
+    - run: ls -las1 fuzz/corpus
+    - run: RUST_BACKTRACE=1 cargo fuzz run ${{ matrix.fuzz_target }} fuzz/corpus -- -max_total_time=${{ env.FUZZ_TIME }} -fork=$(nproc)
+    - run: ls -las1 fuzz/corpus
+
+    - id: ts
+      run: echo "ts=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+    - name: Save merged corpus to cache
+      uses: actions/cache/save@v6
+      with:
+        path: fuzz/corpus
+        key: cargo-fuzz-bin-${{ env.CARGO_FUZZ_VERSION }}-${{ matrix.fuzz_target }}-${{ steps.ts.outputs.ts }}
+
+    # Upload fuzzing artifacts on failure for post-mortem debugging.
+    - name: Capture positive fuzzing artifacts
+      uses: actions/upload-artifact@v7
+      if: failure()
+      with:
+        name: fuzzing-artifacts-${{ matrix.fuzz_target }}-${{ github.sha }}
+        path: fuzz/artifacts
+
