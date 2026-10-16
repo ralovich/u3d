@@ -81,7 +81,7 @@ jobs:
         cd ../..
 
     - name: Run blackbox tests Windows
-      if: runner.os == 'Windows1'
+      if: runner.os == 'Windows'
       run: |
         cd u3d-db/u3ds
         echo "RUST_LOG=debug RUST_BACKTRACE=1 DESCRIBE=../../target/${{env.BUILD_TYPE}}/u3d-describe INPUT=../../testdata/list_all.txt time ../../testdata/u3d_describe_mt"
@@ -100,7 +100,7 @@ jobs:
         colordiff -u testdata/expected_all.txt u3d-db/u3ds/review_summary_u3d.txt
 
     - name: No bb t regressions Windows
-      if: runner.os == 'Windows1'
+      if: runner.os == 'Windows'
       shell: cmd
       run: |
         echo "fc /l testdata\expected_all.txt u3d-db\u3ds\review_summary_u3d.txt"
