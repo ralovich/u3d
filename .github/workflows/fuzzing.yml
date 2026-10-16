@@ -6,10 +6,10 @@ on:
 #  pull_request:
 #    branches: [ "main" ]
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '*/30 * * * *'
 
 env:
-  FUZZ_TIME: 600
+  FUZZ_TIME: 1500
   CARGO_FUZZ_VERSION: 0.13.2
 
 jobs:
