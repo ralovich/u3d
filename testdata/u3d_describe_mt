@@ -17,6 +17,7 @@ import multiprocessing as mp
 import time
 import datetime
 import tqdm
+import zstd
 
 DESCRIBE = os.getenv("DESCRIBE")
 # ls -1S *.u3d > list_all.txt
@@ -28,13 +29,18 @@ outlog='review_summary_u3d.txt'
 def describe_one_file(file_path):
     file_path = file_path.strip()
     log_path = os.path.splitext(file_path)[0]+'.txt'
+    folder = "logs"
 
-    cmd = f'{DESCRIBE} \"{file_path}\" 2>&1 | zstd -zfqo \"logs/{log_path}.zst\" ; exit ${{PIPESTATUS[0]}}'
+    #cmd = f'{DESCRIBE} \"{file_path}\" 2>&1 | zstd -zfqo \"{folder}/{log_path}.zst\" ; exit ${{PIPESTATUS[0]}}'
     #cmd = f'{DESCRIBE} \"{file_path}\" > \"logs/{log_path}\" 2>&1'
     #print(cmd)
     start_time = time.time()
-    cmd_rv = subprocess.run(["bash", "-c", f'{cmd}'])
+    rv = subprocess.run([f"{DESCRIBE}", f'{file_path}'], capture_output = False, check = False, stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
+    with open(f"{folder}/{log_path}.zst", mode='wb') as fp:
+        bytes_written = fp.write(zstd.ZSTD_compress(rv.stdout, 6, 0))
+    #cmd_rv = subprocess.run(["bash", "-c", f'{cmd}'])
     run_time = (time.time() - start_time)*1000
+    cmd_rv = rv.returncode#int(rv.stdout.decode('UTF-8').strip())
 
     ver_major = '?'
     ver_minor = '?'
@@ -61,7 +67,7 @@ def describe_one_file(file_path):
         num_unknown = rv.stdout.decode('UTF-8').strip().split()[10]
         num_unknown = int(num_unknown)
 
-    return (file_path, run_time, cmd_rv.returncode, ver_major, ver_minor, num_blocks, num_failed, num_unknown)
+    return (file_path, run_time, cmd_rv, ver_major, ver_minor, num_blocks, num_failed, num_unknown)
 
 
 if __name__ == '__main__':

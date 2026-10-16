@@ -33,18 +33,18 @@ jobs:
       if: runner.os == 'Linux'
       run: |
         sudo apt-get update
-        sudo apt-get install -y zstd ugrep colordiff python3-tqdm
+        sudo apt-get install -y zstd ugrep colordiff python3-tqdm python3-zstd
 
     - name: Install Homebrew build-deps
       if: runner.os == 'macOS'
       run: |
         brew install zstd ugrep colordiff
-        pip3 install --break-system-packages --user tqdm
+        pip3 install --break-system-packages --user tqdm zstd
     
     - name: Install Windows build-deps
       if: runner.os == 'windows'
       run: |
-        pip3 install --break-system-packages --user tqdm
+        pip3 install --break-system-packages --user tqdm zstd
         choco install ugrep zstandard
 
     - name: Checkout sources
